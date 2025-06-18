@@ -1,4 +1,4 @@
-// 設備盤點系統主要功能 - 優化版本
+// 設備盤點系統主要功能 - 修復版本
 class EquipmentInventory {
   constructor() {
     this.data = [];
@@ -8,13 +8,18 @@ class EquipmentInventory {
     this.currentFilter = 'all';
     this.selectedItems = new Set();
     this.isReady = false;
+    this.qrScanQueue = []; // 增加 QR 掃描佇列
     
     this.init();
   }
 
   // 初始化系統
   async init() {
-    console.log('初始化設備盤點系統...');
+    console.log('🚀 初始化設備盤點系統...');
+    
+    // 先註冊全域可訪問
+    window.inventory = this;
+    
     await this.loadData();
     this.setupEventListeners();
     this.applyTheme();
@@ -23,13 +28,10 @@ class EquipmentInventory {
     // 標記系統已就緒
     this.isReady = true;
     
-    // 註冊全域可訪問
-    window.inventory = this;
-    
     // 處理待處理的 QR 掃描
     this.processPendingScans();
     
-    console.log('設備盤點系統初始化完成，資料筆數:', this.data.length);
+    console.log('✅ 設備盤點系統初始化完成，資料筆數:', this.data.length);
   }
 
   // 載入資料
@@ -42,13 +44,13 @@ class EquipmentInventory {
         this.parseCSV(csvText);
         console.log('從 CSV 檔案載入資料成功，共', this.data.length, '筆');
       } else {
-        // 使用預設資料
-        this.loadDefaultData();
-        console.log('使用預設資料');
+        // 使用內嵌資料
+        this.loadEmbeddedData();
+        console.log('使用內嵌資料');
       }
     } catch (error) {
-      console.log('載入 CSV 失敗，使用預設資料');
-      this.loadDefaultData();
+      console.log('載入 CSV 失敗，使用內嵌資料');
+      this.loadEmbeddedData();
     }
     
     // 從 localStorage 恢復狀態
@@ -56,21 +58,37 @@ class EquipmentInventory {
     this.generateClassrooms();
   }
 
-  // 載入預設資料
-  loadDefaultData() {
-    this.data = [
-      { 編號: '314010102-300933', 名稱: 'ASUS WS690T 工作站主機', 教室: '大同樓1樓科任辦公室D108', 狀態: '未盤點', 最後更新: '' },
-      { 編號: '314010102-301601', 名稱: 'ASUS WS750T', 教室: '大同樓2樓電腦教室D216', 狀態: '未盤點', 最後更新: '' },
-      { 編號: '314010103-300207', 名稱: 'Acer Veritpon M480', 教室: '勤學樓3樓資訊設備室A303', 狀態: '未盤點', 最後更新: '' },
-      { 編號: '314010103-300685', 名稱: '華碩BP1AE桌上型電腦(薄型主機)', 教室: '大同樓2樓D204', 狀態: '未盤點', 最後更新: '' },
-      { 編號: '314010103-300710', 名稱: 'ASUS MD570 i3教學主機(電腦教室)', 教室: '勤學樓3樓資訊設備室A303', 狀態: '未盤點', 最後更新: '' },
-      { 編號: '314010103-300713', 名稱: 'ASUS MD570 i3教學主機(電腦教室)', 教室: '大同樓3樓志工辦公室D316', 狀態: '未盤點', 最後更新: '' },
-      { 編號: 'EQ001', 名稱: '投影機', 教室: '101教室', 狀態: '未盤點', 最後更新: '' },
-      { 編號: 'EQ002', 名稱: '電腦', 教室: '101教室', 狀態: '未盤點', 最後更新: '' },
-      { 編號: 'EQ003', 名稱: '音響', 教室: '102教室', 狀態: '未盤點', 最後更新: '' },
-      { 編號: 'EQ004', 名稱: '白板', 教室: '102教室', 狀態: '未盤點', 最後更新: '' }
-    ];
-    console.log('載入預設資料:', this.data.length, '筆');
+  // 載入內嵌資料（從文檔中的 CSV 資料）
+  loadEmbeddedData() {
+    const csvData = `編號,名稱,教室
+314010102-300933,ASUS WS690T 工作站主機,大同樓1樓科任辦公室D108
+314010102-301601,ASUS WS750T,大同樓2樓電腦教室D216
+314010102-301602,ASUS WS750T,大同樓3樓電腦教室D317
+314010103-300207,Acer Veritpon M480,勤學樓3樓資訊設備室A303
+314010103-300685,華碩BP1AE桌上型電腦(薄型主機),大同樓2樓D204
+314010103-300710,ASUS MD570 i3教學主機(電腦教室),勤學樓3樓資訊設備室A303
+314010103-300713,ASUS MD570 i3教學主機(電腦教室),大同樓3樓志工辦公室D316
+314010103-300714,ASUS MD570 i3教學主機(電腦教室),大同樓1樓科任辦公室D108
+314010103-300715,ASUS MD570 i3教學主機(電腦教室),大同樓1樓科任辦公室D108
+314010103-300717,ASUS MD570 i3教學主機(電腦教室),大同樓1樓英文教室三D126
+314010103-300718,ASUS MD570 i3教學主機(電腦教室),大同樓1樓科任辦公室D108
+314010103-300719,ASUS MD570 i3教學主機(電腦教室),勤學樓3樓資訊設備室A303
+314010103-300721,ASUS MD570 i3教學主機(電腦教室),大同樓4樓美勞教室二 D416
+314010103-300724,ASUS MD570 i3教學主機(電腦教室),關懷樓4樓自然教室三B405
+314010103-300725,ASUS MD570 i3教學主機(電腦教室),大同樓3樓教師研究室D335
+314010103-300726,ASUS MD570 i3教學主機(電腦教室),關懷樓4樓英文教室二B411
+314010103-300728,ASUS MD570 i3教學主機(電腦教室),大同樓1樓音樂教室三D111
+314010103-300729,ASUS MD570 i3教學主機(電腦教室),關懷樓4樓自然教室五B409
+314010103-300731,ASUS MD570 i3教學主機(電腦教室),關懷樓4樓自然教室四B407
+314010103-300732,ASUS MD570 i3教學主機(電腦教室),大同樓3樓教師研究室D335
+314010103-300733,ASUS MD570 i3教學主機(電腦教室),大同樓3樓教師研究室D335
+314010103-300734,ASUS MD570 i3教學主機(電腦教室),勤學樓4樓音樂教室一A418
+314010103-300735,ASUS MD570 i3教學主機(電腦教室),勤學樓2樓社會教室一A218
+314010103-300736,ASUS MD570 i3教學主機(電腦教室),關懷樓4樓自然教室一B401
+314010103-300737,ASUS MD570 i3教學主機(電腦教室),關懷樓4樓自然教室二B403
+314010103-300738,ASUS MD570 i3教學主機(電腦教室),勤學樓2樓美勞教室一A219`;
+    
+    this.parseCSV(csvData);
   }
 
   // 解析 CSV 資料
@@ -82,18 +100,20 @@ class EquipmentInventory {
     });
 
     this.data = results.data.map(row => ({
-      編號: row.編號 || row.id || '',
-      名稱: row.名稱 || row.name || '',
-      教室: row.教室 || row.classroom || '',
+      編號: (row.編號 || row.id || '').toString().trim(),
+      名稱: (row.名稱 || row.name || '').toString().trim(),
+      教室: (row.教室 || row.classroom || '').toString().trim(),
       狀態: '未盤點',
       最後更新: ''
-    }));
+    })).filter(item => item.編號); // 過濾掉沒有編號的項目
+    
+    console.log('✅ 解析 CSV 成功，共', this.data.length, '筆資料');
   }
 
   // 生成教室清單
   generateClassrooms() {
-    this.classrooms = [...new Set(this.data.map(item => item.教室))].sort();
-    console.log('生成教室清單:', this.classrooms.length, '個教室');
+    this.classrooms = [...new Set(this.data.map(item => item.教室))].filter(Boolean).sort();
+    console.log('📋 生成教室清單:', this.classrooms.length, '個教室');
   }
 
   // 設定事件監聽器
@@ -171,7 +191,7 @@ class EquipmentInventory {
 
     // 監聽 QR 掃描事件
     document.addEventListener('qrScanned', (event) => {
-      console.log('收到 qrScanned 事件:', event.detail.data);
+      console.log('📡 收到 qrScanned 事件:', event.detail.data);
       this.handleQRScan(event.detail.data);
     });
   }
@@ -181,20 +201,20 @@ class EquipmentInventory {
     try {
       const pendingScans = JSON.parse(localStorage.getItem('pendingQRScans') || '[]');
       if (pendingScans.length > 0) {
-        console.log('處理', pendingScans.length, '個待處理的掃描結果');
+        console.log('🔄 處理', pendingScans.length, '個待處理的掃描結果');
         
         pendingScans.forEach((scan, index) => {
           setTimeout(() => {
             console.log('處理待處理掃描:', scan.data);
             this.handleQRScan(scan.data);
-          }, index * 500); // 延遲處理避免衝突
+          }, index * 300); // 減少延遲時間
         });
         
         // 清除已處理的掃描結果
         localStorage.removeItem('pendingQRScans');
       }
     } catch (error) {
-      console.error('處理待處理掃描失敗:', error);
+      console.error('❌ 處理待處理掃描失敗:', error);
     }
   }
 
@@ -249,11 +269,19 @@ class EquipmentInventory {
 
   // 顯示 QR 掃描器
   showQRScanner() {
-    console.log('啟動 QR 掃描器');
+    console.log('📱 啟動 QR 掃描器');
     if (window.qrScanner) {
       window.qrScanner.show();
     } else {
       this.showToast('QR 掃描器尚未載入，請稍後再試', 'error');
+      
+      // 嘗試重新初始化 QR 掃描器
+      setTimeout(() => {
+        if (window.QRScannerManager) {
+          window.qrScanner = new window.QRScannerManager();
+          console.log('🔄 重新初始化 QR 掃描器');
+        }
+      }, 1000);
     }
   }
 
@@ -493,13 +521,13 @@ class EquipmentInventory {
 
   // 切換設備狀態 - 優化版本
   toggleStatus(equipmentId) {
-    console.log('切換設備狀態:', equipmentId);
+    console.log('🔄 切換設備狀態:', equipmentId);
     
     const item = this.data.find(d => d.編號 === equipmentId);
     if (!item) {
-      console.error('找不到設備:', equipmentId);
+      console.error('❌ 找不到設備:', equipmentId);
       this.showToast(`找不到設備：${equipmentId}`, 'error');
-      return;
+      return null;
     }
 
     const oldStatus = item.狀態;
@@ -510,7 +538,7 @@ class EquipmentInventory {
     item.狀態 = newStatus;
     item.最後更新 = timestamp;
     
-    console.log(`設備 ${equipmentId} 狀態變更: ${oldStatus} -> ${newStatus}`);
+    console.log(`✅ 設備 ${equipmentId} 狀態變更: ${oldStatus} -> ${newStatus}`);
     
     // 保存狀態並重新渲染
     this.saveStatus();
@@ -523,24 +551,41 @@ class EquipmentInventory {
     return item;
   }
 
-  // QR 掃描結果處理 - 核心方法（重點優化）
+  // QR 掃描結果處理 - 核心方法（重點修復）
   handleQRScan(scannedData) {
     console.log('🔍 處理 QR 掃描結果:', scannedData);
     
     if (!scannedData || !scannedData.trim()) {
-      console.warn('掃描結果為空');
+      console.warn('⚠️ 掃描結果為空');
       this.showToast('掃描結果為空', 'error');
       return false;
     }
     
-    const cleanData = scannedData.trim();
+    const cleanData = scannedData.toString().trim();
+    console.log('🧹 清理後的掃描資料:', cleanData);
     
-    // 尋找對應的設備
-    const item = this.data.find(d => d.編號 === cleanData);
+    // 尋找對應的設備 - 使用更精確的匹配
+    const item = this.data.find(d => {
+      const itemId = d.編號.toString().trim();
+      return itemId === cleanData || itemId.includes(cleanData) || cleanData.includes(itemId);
+    });
     
     if (!item) {
-      console.warn('找不到設備:', cleanData);
+      console.warn('❌ 找不到設備:', cleanData);
+      console.log('📋 現有設備編號列表:', this.data.slice(0, 5).map(d => d.編號));
       this.showToast(`❌ 找不到設備編號：${cleanData}`, 'error');
+      
+      // 提供相似的設備編號建議
+      const similarItems = this.data.filter(d => 
+        d.編號.includes(cleanData.slice(0, 5)) || 
+        cleanData.includes(d.編號.slice(0, 5))
+      ).slice(0, 3);
+      
+      if (similarItems.length > 0) {
+        const suggestions = similarItems.map(d => d.編號).join(', ');
+        this.showToast(`相似設備編號：${suggestions}`, 'info');
+      }
+      
       return false;
     }
     
@@ -590,15 +635,35 @@ class EquipmentInventory {
       // 查找表格中的設備行
       const table = document.querySelector('#equipment-table tbody');
       if (!table) {
-        console.warn('找不到設備表格');
+        console.warn('⚠️ 找不到設備表格');
         return;
       }
       
-      // 使用 data 屬性查找更準確
-      const targetRow = table.querySelector(`tr[data-equipment-id="${equipmentId}"]`);
+      // 使用多種方式查找設備行
+      let targetRow = table.querySelector(`tr[data-equipment-id="${equipmentId}"]`);
+      
+      if (!targetRow) {
+        // 備用方法：遍歷所有行查找匹配的編號
+        const rows = table.querySelectorAll('tr');
+        for (const row of rows) {
+          const idCell = row.querySelector('td:nth-child(2) strong');
+          if (idCell && idCell.textContent.trim() === equipmentId) {
+            targetRow = row;
+            break;
+          }
+        }
+      }
       
       if (targetRow) {
-        // 高亮顯示
+        // 移除舊的高亮
+        document.querySelectorAll('.equipment-highlight').forEach(el => {
+          el.classList.remove('equipment-highlight');
+          el.style.backgroundColor = '';
+          el.style.border = '';
+        });
+        
+        // 添加高亮效果
+        targetRow.classList.add('equipment-highlight');
         targetRow.style.backgroundColor = '#fff3cd';
         targetRow.style.border = '2px solid #ffc107';
         targetRow.style.transition = 'all 0.3s ease';
@@ -612,6 +677,7 @@ class EquipmentInventory {
         
         // 3秒後移除高亮
         setTimeout(() => {
+          targetRow.classList.remove('equipment-highlight');
           targetRow.style.backgroundColor = '';
           targetRow.style.border = '';
         }, 3000);
@@ -620,22 +686,11 @@ class EquipmentInventory {
       } else {
         console.warn('⚠️ 在表格中找不到設備行:', equipmentId);
         
-        // 備用方法：遍歷所有行
-        const rows = table.querySelectorAll('tr');
-        for (const row of rows) {
-          const idCell = row.querySelector('td:nth-child(2) strong');
-          if (idCell && idCell.textContent.trim() === equipmentId) {
-            row.style.backgroundColor = '#fff3cd';
-            row.style.border = '2px solid #ffc107';
-            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => {
-              row.style.backgroundColor = '';
-              row.style.border = '';
-            }, 3000);
-            console.log('✅ 使用備用方法成功高亮設備:', equipmentId);
-            break;
-          }
-        }
+        // 嘗試重新渲染表格
+        this.renderTable();
+        setTimeout(() => {
+          this.highlightEquipment(equipmentId);
+        }, 100);
       }
     } catch (error) {
       console.error('❌ 高亮設備失敗:', error);
@@ -651,12 +706,14 @@ class EquipmentInventory {
     
     const selectedCount = this.selectedItems.size;
     const timestamp = new Date().toLocaleString('zh-TW');
+    let checkedCount = 0;
     
     this.selectedItems.forEach(id => {
       const item = this.data.find(d => d.編號 === id);
       if (item && item.狀態 === '未盤點') {
         item.狀態 = '已盤點';
         item.最後更新 = timestamp;
+        checkedCount++;
       }
     });
     
@@ -664,7 +721,7 @@ class EquipmentInventory {
     this.saveStatus();
     this.render();
     
-    this.showToast(`批量盤點完成，共 ${selectedCount} 項設備`, 'success');
+    this.showToast(`批量盤點完成，共 ${checkedCount} 項設備`, 'success');
   }
 
   // 更新統計資訊
@@ -737,9 +794,9 @@ class EquipmentInventory {
         最後更新: d.最後更新
       }));
       localStorage.setItem('equipment-status', JSON.stringify(statusData));
-      console.log('狀態已保存到 localStorage');
+      console.log('💾 狀態已保存到 localStorage');
     } catch (error) {
-      console.error('儲存狀態失敗:', error);
+      console.error('❌ 儲存狀態失敗:', error);
     }
   }
 
@@ -760,10 +817,10 @@ class EquipmentInventory {
           }
         });
         
-        console.log(`從 localStorage 恢復 ${restoredCount} 個設備狀態`);
+        console.log(`📤 從 localStorage 恢復 ${restoredCount} 個設備狀態`);
       }
     } catch (error) {
-      console.log('恢復狀態失敗:', error);
+      console.log('⚠️ 恢復狀態失敗:', error);
     }
   }
 
@@ -872,9 +929,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // 創建系統實例
   const inventory = new EquipmentInventory();
-  
-  // 確保全域可訪問
-  window.inventory = inventory;
   
   console.log('✅ 設備盤點系統已初始化並設為全域變數');
 });
