@@ -13,10 +13,12 @@ class EquipmentInventory {
 
   // 初始化系統
   async init() {
+    console.log('初始化設備盤點系統...');
     await this.loadData();
     this.setupEventListeners();
     this.applyTheme();
     this.render();
+    console.log('設備盤點系統初始化完成');
   }
 
   // 載入資料
@@ -27,9 +29,11 @@ class EquipmentInventory {
       if (response.ok) {
         const csvText = await response.text();
         this.parseCSV(csvText);
+        console.log('從 CSV 檔案載入資料成功');
       } else {
         // 使用預設資料
         this.loadDefaultData();
+        console.log('使用預設資料');
       }
     } catch (error) {
       console.log('載入 CSV 失敗，使用預設資料');
@@ -55,6 +59,7 @@ class EquipmentInventory {
       { 編號: 'EQ009', 名稱: '籃球', 教室: '體育器材室', 狀態: '未盤點', 最後更新: '' },
       { 編號: 'EQ010', 名稱: '排球', 教室: '體育器材室', 狀態: '未盤點', 最後更新: '' }
     ];
+    console.log('載入預設資料:', this.data.length, '筆');
   }
 
   // 解析 CSV 資料
@@ -82,25 +87,69 @@ class EquipmentInventory {
   // 設定事件監聽器
   setupEventListeners() {
     // 搜尋功能
-    document.getElementById('search-input').addEventListener('input', () => this.renderTable());
-    document.getElementById('clear-search').addEventListener('click', () => {
-      document.getElementById('search-input').value = '';
-      this.renderTable();
-    });
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => this.renderTable());
+    }
+
+    const clearSearchBtn = document.getElementById('clear-search');
+    if (clearSearchBtn) {
+      clearSearchBtn.addEventListener('click', () => {
+        document.getElementById('search-input').value = '';
+        this.renderTable();
+      });
+    }
 
     // 教室搜尋
-    document.getElementById('classroom-search').addEventListener('input', () => this.filterClassrooms());
+    const classroomSearch = document.getElementById('classroom-search');
+    if (classroomSearch) {
+      classroomSearch.addEventListener('input', () => this.filterClassrooms());
+    }
+
+    const clearClassroomBtn = document.getElementById('clear-classroom-search');
+    if (clearClassroomBtn) {
+      clearClassroomBtn.addEventListener('click', () => {
+        document.getElementById('classroom-search').value = '';
+        this.filterClassrooms();
+      });
+    }
 
     // 按鈕事件
-    document.getElementById('upload-btn').addEventListener('click', () => this.showUpload());
-    document.getElementById('qr-scan-btn').addEventListener('click', () => this.showQRScanner());
-    document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
-    document.getElementById('export-btn').addEventListener('click', () => this.exportData());
-    document.getElementById('reset-btn').addEventListener('click', () => this.resetStatus());
-    document.getElementById('bulk-check').addEventListener('click', () => this.bulkCheck());
+    const uploadBtn = document.getElementById('upload-btn');
+    if (uploadBtn) {
+      uploadBtn.addEventListener('click', () => this.showUpload());
+    }
+
+    const qrScanBtn = document.getElementById('qr-scan-btn');
+    if (qrScanBtn) {
+      qrScanBtn.addEventListener('click', () => this.showQRScanner());
+    }
+
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => this.toggleTheme());
+    }
+
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => this.exportData());
+    }
+
+    const resetBtn = document.getElementById('reset-btn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => this.resetStatus());
+    }
+
+    const bulkCheckBtn = document.getElementById('bulk-check');
+    if (bulkCheckBtn) {
+      bulkCheckBtn.addEventListener('click', () => this.bulkCheck());
+    }
 
     // 檔案上傳
-    document.getElementById('file-input').addEventListener('change', (e) => this.handleFileUpload(e));
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
+    }
 
     // 篩選按鈕
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -108,7 +157,10 @@ class EquipmentInventory {
     });
 
     // 全選功能
-    document.getElementById('select-all').addEventListener('change', (e) => this.selectAll(e.target.checked));
+    const selectAllCheckbox = document.getElementById('select-all');
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', (e) => this.selectAll(e.target.checked));
+    }
 
     // 拖放功能
     this.setupDragDrop();
@@ -125,40 +177,50 @@ class EquipmentInventory {
     });
 
     const uploadOverlay = document.getElementById('upload-overlay');
-    uploadOverlay.addEventListener('drop', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const files = e.dataTransfer.files;
-      if (files.length > 0 && files[0].type === 'text/csv') {
-        this.processFile(files[0]);
-      } else {
-        this.showToast('請上傳 CSV 檔案', 'error');
-      }
-      
-      this.closeUpload();
-    });
+    if (uploadOverlay) {
+      uploadOverlay.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].type === 'text/csv') {
+          this.processFile(files[0]);
+        } else {
+          this.showToast('請上傳 CSV 檔案', 'error');
+        }
+        
+        this.closeUpload();
+      });
 
-    uploadOverlay.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
+      uploadOverlay.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    }
   }
 
   // 顯示上傳界面
   showUpload() {
-    document.getElementById('upload-overlay').classList.add('show');
+    const overlay = document.getElementById('upload-overlay');
+    if (overlay) {
+      overlay.classList.add('show');
+    }
   }
 
   // 關閉上傳界面
   closeUpload() {
-    document.getElementById('upload-overlay').classList.remove('show');
+    const overlay = document.getElementById('upload-overlay');
+    if (overlay) {
+      overlay.classList.remove('show');
+    }
   }
 
   // 顯示 QR 掃描器
   showQRScanner() {
     if (window.qrScanner) {
       window.qrScanner.show();
+    } else {
+      this.showToast('QR 掃描器尚未載入', 'error');
     }
   }
 
@@ -216,6 +278,7 @@ class EquipmentInventory {
     this.theme = themes[(currentIndex + 1) % themes.length];
     this.applyTheme();
     this.renderTable();
+    this.showToast(`已切換至 ${this.theme} 主題`, 'info');
   }
 
   // 應用主題
@@ -248,6 +311,8 @@ class EquipmentInventory {
   // 渲染教室清單
   renderClassroomList() {
     const list = document.getElementById('classroom-list');
+    if (!list) return;
+    
     list.innerHTML = '';
     
     // 全部選項
@@ -276,7 +341,7 @@ class EquipmentInventory {
 
   // 過濾教室
   filterClassrooms() {
-    const keyword = document.getElementById('classroom-search').value.toLowerCase();
+    const keyword = document.getElementById('classroom-search')?.value.toLowerCase() || '';
     const items = document.querySelectorAll('#classroom-list li');
     
     items.forEach((item, index) => {
@@ -288,8 +353,10 @@ class EquipmentInventory {
 
   // 渲染表格
   renderTable() {
-    const keyword = document.getElementById('search-input').value.toLowerCase();
+    const keyword = document.getElementById('search-input')?.value.toLowerCase() || '';
     const tbody = document.querySelector('#equipment-table tbody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
     
     let filteredData = this.getFilteredData(keyword);
@@ -301,20 +368,20 @@ class EquipmentInventory {
       tr.innerHTML = `
         <td>
           <input type="checkbox" ${this.selectedItems.has(item.編號) ? 'checked' : ''} 
-                 onchange="inventory.toggleSelect('${item.編號}', this.checked)">
+                 onchange="window.inventory.toggleSelect('${item.編號}', this.checked)">
         </td>
         <td><strong>${item.編號}</strong></td>
         <td>${item.名稱}</td>
         <td>${item.教室}</td>
         <td>
           <span class="status-cell ${this.getStatusClass(item.狀態)}" 
-                onclick="inventory.toggleStatus('${item.編號}')">
+                onclick="window.inventory.toggleStatus('${item.編號}')">
             ${item.狀態}
           </span>
         </td>
         <td>${item.最後更新 || '-'}</td>
         <td>
-          <button onclick="inventory.toggleStatus('${item.編號}')" 
+          <button onclick="window.inventory.toggleStatus('${item.編號}')" 
                   class="btn ${item.狀態 === '未盤點' ? 'btn-success' : 'btn-secondary'}"
                   style="padding: 5px 10px; font-size: 0.8rem;">
             ${item.狀態 === '未盤點' ? '✅ 盤點' : '❌ 取消'}
@@ -373,11 +440,12 @@ class EquipmentInventory {
       this.selectedItems.delete(id);
     }
     this.renderTable();
+    this.updateSelectedCount();
   }
 
   // 全選/取消全選
   selectAll(checked) {
-    const filteredData = this.getFilteredData(document.getElementById('search-input').value.toLowerCase());
+    const filteredData = this.getFilteredData(document.getElementById('search-input')?.value.toLowerCase() || '');
     
     if (checked) {
       filteredData.forEach(item => this.selectedItems.add(item.編號));
@@ -386,6 +454,7 @@ class EquipmentInventory {
     }
     
     this.renderTable();
+    this.updateSelectedCount();
   }
 
   // 切換設備狀態
@@ -438,9 +507,23 @@ class EquipmentInventory {
     const checked = filteredData.filter(d => d.狀態 === '已盤點').length;
     const unchecked = total - checked;
     
-    document.getElementById('total-count').textContent = total;
-    document.getElementById('checked-count').textContent = checked;
-    document.getElementById('unchecked-count').textContent = unchecked;
+    const totalElement = document.getElementById('total-count');
+    const checkedElement = document.getElementById('checked-count');
+    const uncheckedElement = document.getElementById('unchecked-count');
+    
+    if (totalElement) totalElement.textContent = total;
+    if (checkedElement) checkedElement.textContent = checked;
+    if (uncheckedElement) uncheckedElement.textContent = unchecked;
+    
+    this.updateSelectedCount();
+  }
+
+  // 更新選擇數量
+  updateSelectedCount() {
+    const selectedElement = document.getElementById('selected-count');
+    if (selectedElement) {
+      selectedElement.textContent = this.selectedItems.size;
+    }
   }
 
   // 更新進度環
@@ -452,34 +535,42 @@ class EquipmentInventory {
     const progressElement = document.getElementById('progress-percent');
     const circle = document.querySelector('.progress-ring-fill');
     
-    progressElement.textContent = `${Math.round(progress)}%`;
+    if (progressElement) {
+      progressElement.textContent = `${Math.round(progress)}%`;
+    }
     
-    // 更新圓環進度
-    const circumference = 2 * Math.PI * 50;
-    const offset = circumference - (progress / 100) * circumference;
-    circle.style.strokeDashoffset = offset;
-    
-    // 更新顏色
-    if (progress === 100) {
-      circle.style.stroke = '#28A745';
-      progressElement.style.color = '#28A745';
-    } else if (progress >= 50) {
-      circle.style.stroke = '#FFC107';
-      progressElement.style.color = '#FFC107';
-    } else {
-      circle.style.stroke = '#DC3545';
-      progressElement.style.color = '#DC3545';
+    if (circle) {
+      // 更新圓環進度
+      const circumference = 2 * Math.PI * 50;
+      const offset = circumference - (progress / 100) * circumference;
+      circle.style.strokeDashoffset = offset;
+      
+      // 更新顏色
+      if (progress === 100) {
+        circle.style.stroke = '#28A745';
+        if (progressElement) progressElement.style.color = '#28A745';
+      } else if (progress >= 50) {
+        circle.style.stroke = '#FFC107';
+        if (progressElement) progressElement.style.color = '#FFC107';
+      } else {
+        circle.style.stroke = '#DC3545';
+        if (progressElement) progressElement.style.color = '#DC3545';
+      }
     }
   }
 
   // 儲存狀態
   saveStatus() {
-    const statusData = this.data.map(d => ({
-      編號: d.編號,
-      狀態: d.狀態,
-      最後更新: d.最後更新
-    }));
-    localStorage.setItem('equipment-status', JSON.stringify(statusData));
+    try {
+      const statusData = this.data.map(d => ({
+        編號: d.編號,
+        狀態: d.狀態,
+        最後更新: d.最後更新
+      }));
+      localStorage.setItem('equipment-status', JSON.stringify(statusData));
+    } catch (error) {
+      console.error('儲存狀態失敗:', error);
+    }
   }
 
   // 恢復狀態
@@ -531,6 +622,8 @@ class EquipmentInventory {
       link.click();
       document.body.removeChild(link);
       this.showToast('報表匯出成功', 'success');
+    } else {
+      this.showToast('瀏覽器不支援檔案下載', 'error');
     }
   }
 
@@ -553,12 +646,16 @@ class EquipmentInventory {
   // 顯示載入中
   showLoading(show) {
     const loading = document.getElementById('loading');
-    loading.style.display = show ? 'flex' : 'none';
+    if (loading) {
+      loading.style.display = show ? 'flex' : 'none';
+    }
   }
 
   // 顯示提示訊息
   showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
+    if (!container) return;
+    
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
@@ -576,90 +673,75 @@ class EquipmentInventory {
     }, 5000);
   }
 
-// 從 QR Code 掃描結果處理設備 - 改進版
-handleQRScan(result) {
-  console.log('handleQRScan 收到掃描結果:', result);
-  
-  // 清理掃描數據
-  const cleanResult = result.trim();
-  
-  // 尋找對應的設備
-  const item = this.data.find(d => d.編號 === cleanResult);
-  
-  if (item) {
-    console.log('找到對應設備:', item);
+  // 從 QR Code 掃描結果處理設備
+  handleQRScan(result) {
+    console.log('handleQRScan 收到掃描結果:', result);
     
-    // 檢查當前狀態
-    if (item.狀態 === '未盤點') {
-      this.toggleStatus(cleanResult);
-      this.showToast(`✅ ${item.編號} - ${item.名稱} 盤點完成`, 'success');
-    } else {
-      this.showToast(`ℹ️ ${item.編號} - ${item.名稱} 已經盤點過了`, 'info');
+    // 清理掃描數據
+    const cleanResult = result.trim();
+    
+    // 尋找對應的設備
+    const item = this.data.find(d => d.編號 === cleanResult);
+    
+    if (item) {
+      console.log('找到對應設備:', item);
       
-      // 可選：允許取消盤點
-      if (confirm(`設備 ${item.編號} - ${item.名稱} 已經盤點過了，是否要取消盤點？`)) {
+      // 檢查當前狀態
+      if (item.狀態 === '未盤點') {
         this.toggleStatus(cleanResult);
-      }
-    }
-    
-    // 自動滾動到該設備
-    this.scrollToEquipment(cleanResult);
-    
-  } else {
-    console.warn('找不到設備:', cleanResult);
-    this.showToast(`❌ 找不到設備編號：${cleanResult}`, 'error');
-    
-    // 記錄未找到的設備
-    this.logUnfoundEquipment(cleanResult);
-  }
-}
-
-// 新增：滾動到指定設備
-scrollToEquipment(equipmentId) {
-  try {
-    // 查找表格中的設備行
-    const table = document.querySelector('#equipment-table tbody');
-    if (!table) return;
-    
-    const rows = table.querySelectorAll('tr');
-    for (const row of rows) {
-      const idCell = row.querySelector('td:nth-child(2) strong');
-      if (idCell && idCell.textContent.trim() === equipmentId) {
-        // 高亮顯示
-        row.style.backgroundColor = '#fff3cd';
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        this.showToast(`✅ ${item.編號} - ${item.名稱} 盤點完成`, 'success');
+      } else {
+        this.showToast(`ℹ️ ${item.編號} - ${item.名稱} 已經盤點過了`, 'info');
         
-        // 3秒後移除高亮
-        setTimeout(() => {
-          row.style.backgroundColor = '';
-        }, 3000);
-        
-        break;
+        // 可選：允許取消盤點
+        if (confirm(`設備 ${item.編號} - ${item.名稱} 已經盤點過了，是否要取消盤點？`)) {
+          this.toggleStatus(cleanResult);
+        }
       }
+      
+      // 自動滾動到該設備
+      this.scrollToEquipment(cleanResult);
+      
+    } else {
+      console.warn('找不到設備:', cleanResult);
+      this.showToast(`❌ 找不到設備編號：${cleanResult}`, 'error');
     }
-  } catch (error) {
-    console.error('滾動到設備失敗:', error);
   }
-}
 
-// 新增：記錄未找到的設備
-logUnfoundEquipment(equipmentId) {
-  try {
-    const unfoundLog = JSON.parse(localStorage.getItem('unfoundEquipment') || '[]');
-    unfoundLog.push({
-      id: equipmentId,
-      timestamp: new Date().toISOString()
-    });
-    // 只保留最近50筆記錄
-    localStorage.setItem('unfoundEquipment', JSON.stringify(unfoundLog.slice(-50)));
-  } catch (error) {
-    console.error('記錄未找到設備失敗:', error);
+  // 滾動到指定設備
+  scrollToEquipment(equipmentId) {
+    try {
+      // 查找表格中的設備行
+      const table = document.querySelector('#equipment-table tbody');
+      if (!table) return;
+      
+      const rows = table.querySelectorAll('tr');
+      for (const row of rows) {
+        const idCell = row.querySelector('td:nth-child(2) strong');
+        if (idCell && idCell.textContent.trim() === equipmentId) {
+          // 高亮顯示
+          row.style.backgroundColor = '#fff3cd';
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // 3秒後移除高亮
+          setTimeout(() => {
+            row.style.backgroundColor = '';
+          }, 3000);
+          
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('滾動到設備失敗:', error);
+    }
   }
 }
 
 // 全域函數（供 HTML 調用）
 function closeUpload() {
-  inventory.closeUpload();
+  if (window.inventory) {
+    window.inventory.closeUpload();
+  }
 }
 
 function closeQRScanner() {
@@ -668,7 +750,10 @@ function closeQRScanner() {
   }
 }
 
+// 全域變數
 let inventory;
+
+// 初始化
 document.addEventListener('DOMContentLoaded', () => {
   inventory = new EquipmentInventory();
   // 確保全域可訪問
