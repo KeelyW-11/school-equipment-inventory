@@ -1,4 +1,4 @@
-// 設備盤點系統主要功能
+// 設備盤點系統主要功能 - 優化版本
 class EquipmentInventory {
   constructor() {
     this.data = [];
@@ -18,7 +18,11 @@ class EquipmentInventory {
     this.setupEventListeners();
     this.applyTheme();
     this.render();
-    console.log('設備盤點系統初始化完成');
+    
+    // 註冊全域可訪問
+    window.inventory = this;
+    
+    console.log('設備盤點系統初始化完成，資料筆數:', this.data.length);
   }
 
   // 載入資料
@@ -29,7 +33,7 @@ class EquipmentInventory {
       if (response.ok) {
         const csvText = await response.text();
         this.parseCSV(csvText);
-        console.log('從 CSV 檔案載入資料成功');
+        console.log('從 CSV 檔案載入資料成功，共', this.data.length, '筆');
       } else {
         // 使用預設資料
         this.loadDefaultData();
@@ -82,6 +86,7 @@ class EquipmentInventory {
   // 生成教室清單
   generateClassrooms() {
     this.classrooms = [...new Set(this.data.map(item => item.教室))].sort();
+    console.log('生成教室清單:', this.classrooms.length, '個教室');
   }
 
   // 設定事件監聽器
@@ -104,14 +109,6 @@ class EquipmentInventory {
     const classroomSearch = document.getElementById('classroom-search');
     if (classroomSearch) {
       classroomSearch.addEventListener('input', () => this.filterClassrooms());
-    }
-
-    const clearClassroomBtn = document.getElementById('clear-classroom-search');
-    if (clearClassroomBtn) {
-      clearClassroomBtn.addEventListener('click', () => {
-        document.getElementById('classroom-search').value = '';
-        this.filterClassrooms();
-      });
     }
 
     // 按鈕事件
@@ -217,10 +214,11 @@ class EquipmentInventory {
 
   // 顯示 QR 掃描器
   showQRScanner() {
+    console.log('啟動 QR 掃描器');
     if (window.qrScanner) {
       window.qrScanner.show();
     } else {
-      this.showToast('QR 掃描器尚未載入', 'error');
+      this.showToast('QR 掃描器尚未載入，請稍後再試', 'error');
     }
   }
 
@@ -364,6 +362,7 @@ class EquipmentInventory {
     filteredData.forEach(item => {
       const tr = document.createElement('tr');
       tr.className = this.selectedItems.has(item.編號) ? 'selected' : '';
+      tr.setAttribute('data-equipment-id', item.編號); // 添加設備ID屬性
       
       tr.innerHTML = `
         <td>
@@ -457,19 +456,142 @@ class EquipmentInventory {
     this.updateSelectedCount();
   }
 
-  // 切換設備狀態
+  // 切換設備狀態 - 優化版本
   toggleStatus(equipmentId) {
+    console.log('切換設備狀態:', equipmentId);
+    
     const item = this.data.find(d => d.編號 === equipmentId);
-    if (item) {
-      const oldStatus = item.狀態;
-      item.狀態 = item.狀態 === '未盤點' ? '已盤點' : '未盤點';
-      item.最後更新 = new Date().toLocaleString('zh-TW');
+    if (!item) {
+      console.error('找不到設備:', equipmentId);
+      this.showToast(`找不到設備：${equipmentId}`, 'error');
+      return;
+    }
+
+    const oldStatus = item.狀態;
+    const newStatus = item.狀態 === '未盤點' ? '已盤點' : '未盤點';
+    const timestamp = new Date().toLocaleString('zh-TW');
+    
+    // 更新設備狀態
+    item.狀態 = newStatus;
+    item.最後更新 = timestamp;
+    
+    console.log(`設備 ${equipmentId} 狀態變更: ${oldStatus} -> ${newStatus}`);
+    
+    // 保存狀態並重新渲染
+    this.saveStatus();
+    this.render();
+    
+    // 顯示成功訊息
+    const action = newStatus === '已盤點' ? '盤點完成' : '取消盤點';
+    this.showToast(`${item.編號} - ${item.名稱} ${action}`, 'success');
+    
+    return item;
+  }
+
+  // QR 掃描結果處理 - 核心方法
+  handleQRScan(scannedData) {
+    console.log('處理 QR 掃描結果:', scannedData);
+    
+    if (!scannedData || !scannedData.trim()) {
+      console.warn('掃描結果為空');
+      this.showToast('掃描結果為空', 'error');
+      return false;
+    }
+    
+    const cleanData = scannedData.trim();
+    
+    // 尋找對應的設備
+    const item = this.data.find(d => d.編號 === cleanData);
+    
+    if (!item) {
+      console.warn('找不到設備:', cleanData);
+      this.showToast(`❌ 找不到設備編號：${cleanData}`, 'error');
+      return false;
+    }
+    
+    console.log('找到對應設備:', item);
+    
+    // 檢查當前狀態並處理
+    if (item.狀態 === '未盤點') {
+      // 直接盤點
+      const updatedItem = this.toggleStatus(cleanData);
+      if (updatedItem) {
+        this.showToast(`✅ ${item.編號} - ${item.名稱} 盤點完成`, 'success');
+        this.highlightEquipment(cleanData);
+        return true;
+      }
+    } else {
+      // 已經盤點過了
+      this.showToast(`ℹ️ ${item.編號} - ${item.名稱} 已盤點過 (${item.最後更新})`, 'info');
       
-      this.saveStatus();
-      this.render();
+      // 詢問是否要取消盤點
+      setTimeout(() => {
+        if (confirm(`設備 ${item.編號} - ${item.名稱} 已經盤點過了\n盤點時間: ${item.最後更新}\n\n是否要取消盤點？`)) {
+          const updatedItem = this.toggleStatus(cleanData);
+          if (updatedItem) {
+            this.showToast(`❌ ${item.編號} - ${item.名稱} 已取消盤點`, 'warning');
+          }
+        }
+      }, 500);
       
-      const action = item.狀態 === '已盤點' ? '盤點完成' : '取消盤點';
-      this.showToast(`${item.編號} - ${item.名稱} ${action}`, 'success');
+      this.highlightEquipment(cleanData);
+      return true;
+    }
+    
+    return false;
+  }
+
+  // 高亮顯示設備 - 改進版本
+  highlightEquipment(equipmentId) {
+    try {
+      // 查找表格中的設備行
+      const table = document.querySelector('#equipment-table tbody');
+      if (!table) {
+        console.warn('找不到設備表格');
+        return;
+      }
+      
+      // 使用 data 屬性查找更準確
+      const targetRow = table.querySelector(`tr[data-equipment-id="${equipmentId}"]`);
+      
+      if (targetRow) {
+        // 高亮顯示
+        targetRow.style.backgroundColor = '#fff3cd';
+        targetRow.style.transition = 'background-color 0.3s ease';
+        
+        // 滾動到視圖中
+        targetRow.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center',
+          inline: 'nearest'
+        });
+        
+        // 3秒後移除高亮
+        setTimeout(() => {
+          targetRow.style.backgroundColor = '';
+        }, 3000);
+        
+        console.log('成功高亮設備:', equipmentId);
+      } else {
+        console.warn('在表格中找不到設備行:', equipmentId);
+        
+        // 備用方法：遍歷所有行
+        const rows = table.querySelectorAll('tr');
+        for (const row of rows) {
+          const idCell = row.querySelector('td:nth-child(2) strong');
+          if (idCell && idCell.textContent.trim() === equipmentId) {
+            row.style.backgroundColor = '#fff3cd';
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+              row.style.backgroundColor = '';
+            }, 3000);
+            console.log('使用備用方法成功高亮設備:', equipmentId);
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('高亮設備失敗:', error);
     }
   }
 
@@ -568,6 +690,7 @@ class EquipmentInventory {
         最後更新: d.最後更新
       }));
       localStorage.setItem('equipment-status', JSON.stringify(statusData));
+      console.log('狀態已保存到 localStorage');
     } catch (error) {
       console.error('儲存狀態失敗:', error);
     }
@@ -579,16 +702,21 @@ class EquipmentInventory {
       const saved = localStorage.getItem('equipment-status');
       if (saved) {
         const statusData = JSON.parse(saved);
+        let restoredCount = 0;
+        
         statusData.forEach(saved => {
           const item = this.data.find(d => d.編號 === saved.編號);
           if (item) {
             item.狀態 = saved.狀態;
             item.最後更新 = saved.最後更新;
+            restoredCount++;
           }
         });
+        
+        console.log(`從 localStorage 恢復 ${restoredCount} 個設備狀態`);
       }
     } catch (error) {
-      console.log('恢復狀態失敗');
+      console.log('恢復狀態失敗:', error);
     }
   }
 
@@ -654,7 +782,11 @@ class EquipmentInventory {
   // 顯示提示訊息
   showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
-    if (!container) return;
+    if (!container) {
+      // 備用顯示方式
+      console.log(`Toast [${type}]:`, message);
+      return;
+    }
     
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -672,69 +804,6 @@ class EquipmentInventory {
       }
     }, 5000);
   }
-
-  // 從 QR Code 掃描結果處理設備
-  handleQRScan(result) {
-    console.log('handleQRScan 收到掃描結果:', result);
-    
-    // 清理掃描數據
-    const cleanResult = result.trim();
-    
-    // 尋找對應的設備
-    const item = this.data.find(d => d.編號 === cleanResult);
-    
-    if (item) {
-      console.log('找到對應設備:', item);
-      
-      // 檢查當前狀態
-      if (item.狀態 === '未盤點') {
-        this.toggleStatus(cleanResult);
-        this.showToast(`✅ ${item.編號} - ${item.名稱} 盤點完成`, 'success');
-      } else {
-        this.showToast(`ℹ️ ${item.編號} - ${item.名稱} 已經盤點過了`, 'info');
-        
-        // 可選：允許取消盤點
-        if (confirm(`設備 ${item.編號} - ${item.名稱} 已經盤點過了，是否要取消盤點？`)) {
-          this.toggleStatus(cleanResult);
-        }
-      }
-      
-      // 自動滾動到該設備
-      this.scrollToEquipment(cleanResult);
-      
-    } else {
-      console.warn('找不到設備:', cleanResult);
-      this.showToast(`❌ 找不到設備編號：${cleanResult}`, 'error');
-    }
-  }
-
-  // 滾動到指定設備
-  scrollToEquipment(equipmentId) {
-    try {
-      // 查找表格中的設備行
-      const table = document.querySelector('#equipment-table tbody');
-      if (!table) return;
-      
-      const rows = table.querySelectorAll('tr');
-      for (const row of rows) {
-        const idCell = row.querySelector('td:nth-child(2) strong');
-        if (idCell && idCell.textContent.trim() === equipmentId) {
-          // 高亮顯示
-          row.style.backgroundColor = '#fff3cd';
-          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
-          // 3秒後移除高亮
-          setTimeout(() => {
-            row.style.backgroundColor = '';
-          }, 3000);
-          
-          break;
-        }
-      }
-    } catch (error) {
-      console.error('滾動到設備失敗:', error);
-    }
-  }
 }
 
 // 全域函數（供 HTML 調用）
@@ -750,14 +819,15 @@ function closeQRScanner() {
   }
 }
 
-// 全域變數
-let inventory;
-
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
-  inventory = new EquipmentInventory();
+  console.log('DOM 載入完成，開始初始化設備盤點系統');
+  
+  // 創建系統實例
+  const inventory = new EquipmentInventory();
+  
   // 確保全域可訪問
   window.inventory = inventory;
   
-  console.log('設備盤點系統已初始化');
+  console.log('設備盤點系統已初始化並設為全域變數');
 });
