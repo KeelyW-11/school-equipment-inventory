@@ -1,4 +1,4 @@
-// QR Code 掃描器功能
+// QR Code 掃描器功能 - 優化版本
 class QRScannerManager {
   constructor() {
     this.scanner = null;
@@ -8,12 +8,15 @@ class QRScannerManager {
     this.currentCameraIndex = 0;
     this.scannerElement = null;
     this.stream = null;
+    this.lastScanTime = 0;
+    this.scanCooldown = 2000; // 2秒冷卻時間，避免重複掃描
     
     this.init();
   }
 
   // 初始化掃描器
   async init() {
+    console.log('初始化 QR 掃描器...');
     this.scannerElement = document.getElementById('qr-scanner');
     this.video = document.getElementById('qr-video');
     
@@ -22,6 +25,8 @@ class QRScannerManager {
     
     // 檢查相機權限
     await this.checkCameraPermission();
+    
+    console.log('QR 掃描器初始化完成');
   }
 
   // 設定事件監聽器
@@ -44,6 +49,11 @@ class QRScannerManager {
     if (closeBtn) {
       closeBtn.addEventListener('click', () => this.hide());
     }
+
+    // 監聽自定義 QR 掃描事件
+    document.addEventListener('qrScanResult', (event) => {
+      this.handleScanResult(event.detail.data);
+    });
   }
 
   // 檢查相機權限
@@ -59,6 +69,7 @@ class QRScannerManager {
           return false;
         }
         
+        console.log(`找到 ${this.cameras.length} 個相機設備`);
         return true;
       } else {
         this.showError('您的瀏覽器不支援相機功能');
@@ -72,6 +83,8 @@ class QRScannerManager {
 
   // 顯示掃描器
   async show() {
+    console.log('顯示 QR 掃描器');
+    
     if (!await this.checkCameraPermission()) {
       return;
     }
@@ -86,6 +99,8 @@ class QRScannerManager {
 
   // 隱藏掃描器
   hide() {
+    console.log('隱藏 QR 掃描器');
+    
     if (this.scannerElement) {
       this.scannerElement.classList.remove('show');
       document.body.style.overflow = '';
@@ -96,13 +111,18 @@ class QRScannerManager {
 
   // 開始掃描
   async startScanning() {
-    if (this.isScanning) return;
+    if (this.isScanning) {
+      console.log('掃描器已在運行中');
+      return;
+    }
 
     try {
       this.updateScanStatus('正在啟動相機...');
+      console.log('開始啟動 QR 掃描');
       
       // 停止現有的掃描
       if (this.scanner) {
+        await this.scanner.stop();
         this.scanner.destroy();
         this.scanner = null;
       }
@@ -132,34 +152,44 @@ class QRScannerManager {
         this.video.srcObject = this.stream;
         
         // 等待視頻載入
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
           this.video.onloadedmetadata = resolve;
+          this.video.onerror = reject;
+          setTimeout(reject, 5000); // 5秒超時
         });
 
         await this.video.play();
+        console.log('視頻流啟動成功');
       }
 
       // 初始化 QR 掃描器
       if (typeof QrScanner !== 'undefined' && this.video) {
+        console.log('使用 QrScanner 庫初始化掃描器');
+        
         this.scanner = new QrScanner(
           this.video,
-          (result) => this.handleScanResult(result),
+          (result) => {
+            console.log('QrScanner 掃描到結果:', result);
+            this.handleScanResult(result);
+          },
           {
             onDecodeError: (error) => {
-              // 靜默處理解碼錯誤
+              // 靜默處理解碼錯誤，避免控制台spam
             },
             highlightScanRegion: true,
             highlightCodeOutline: true,
-            preferredCamera: 'environment'
+            preferredCamera: 'environment',
+            maxScansPerSecond: 2 // 限制掃描頻率
           }
         );
 
         await this.scanner.start();
         this.isScanning = true;
         this.updateScanStatus('請將 QR Code 對準掃描框');
+        console.log('QR 掃描器啟動成功');
         
       } else {
-        // 如果 QrScanner 庫未載入，使用備用方案
+        console.log('QrScanner 庫未載入，使用備用方案');
         this.startManualScanning();
       }
 
@@ -169,47 +199,26 @@ class QRScannerManager {
     }
   }
 
-  // 備用掃描方案（使用 Canvas）
+  // 備用掃描方案
   startManualScanning() {
+    console.log('啟動手動掃描模式');
     this.isScanning = true;
     this.updateScanStatus('正在掃描中...');
     
-    // 創建 Canvas 進行圖像處理
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    
-    const scanInterval = setInterval(() => {
-      if (!this.isScanning) {
-        clearInterval(scanInterval);
-        return;
-      }
-      
-      try {
-        if (this.video && this.video.videoWidth > 0) {
-          canvas.width = this.video.videoWidth;
-          canvas.height = this.video.videoHeight;
-          context.drawImage(this.video, 0, 0);
-          
-          // 這裡可以加入其他 QR 解碼庫的邏輯
-          // 例如使用 jsQR 庫
-          if (typeof jsQR !== 'undefined') {
-            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            
-            if (code) {
-              this.handleScanResult(code.data);
-              clearInterval(scanInterval);
-            }
-          }
+    // 提示用戶手動輸入
+    setTimeout(() => {
+      if (this.isScanning) {
+        const manualInput = prompt('QR 掃描失敗，請手動輸入設備編號：');
+        if (manualInput && manualInput.trim()) {
+          this.handleScanResult(manualInput.trim());
         }
-      } catch (error) {
-        // 忽略掃描錯誤
       }
-    }, 500);
+    }, 3000);
   }
 
   // 停止掃描
   stopScanning() {
+    console.log('停止 QR 掃描');
     this.isScanning = false;
     
     if (this.scanner) {
@@ -236,27 +245,40 @@ class QRScannerManager {
       return;
     }
 
+    console.log('切換相機');
     this.currentCameraIndex = (this.currentCameraIndex + 1) % this.cameras.length;
     
     if (this.isScanning) {
       this.stopScanning();
-      await new Promise(resolve => setTimeout(resolve, 500)); // 等待停止完成
+      await new Promise(resolve => setTimeout(resolve, 500));
       await this.startScanning();
     }
   }
 
-  // 處理掃描結果
+  // 處理掃描結果 - 主要優化點
   handleScanResult(result) {
-    const scannedData = typeof result === 'string' ? result : result.data;
+    const currentTime = Date.now();
     
-    if (!scannedData) {
-      console.warn('掃描結果為空');
+    // 防止重複掃描
+    if (currentTime - this.lastScanTime < this.scanCooldown) {
+      console.log('掃描冷卻中，忽略重複掃描');
       return;
     }
     
-    console.log('QR 掃描結果:', scannedData);
+    this.lastScanTime = currentTime;
     
-    // 震動反饋（如果支援）
+    const scannedData = typeof result === 'string' ? result : result.data;
+    
+    if (!scannedData || !scannedData.trim()) {
+      console.warn('掃描結果為空');
+      this.updateScanStatus('掃描結果為空，請重新掃描');
+      return;
+    }
+    
+    const cleanData = scannedData.trim();
+    console.log('處理 QR 掃描結果:', cleanData);
+    
+    // 震動反饋
     if (navigator.vibrate) {
       navigator.vibrate(200);
     }
@@ -265,103 +287,118 @@ class QRScannerManager {
     this.playBeep();
 
     // 顯示掃描成功訊息
-    this.updateScanStatus(`掃描成功：${scannedData}`);
+    this.updateScanStatus(`掃描成功：${cleanData}`);
 
-    // 處理掃描結果
-    this.processQRResult(scannedData);
-
-    // 短暫延遲後隱藏掃描器
-    setTimeout(() => {
-      this.hide();
-    }, 1500);
+    // 立即處理掃描結果
+    this.processQRResult(cleanData);
   }
 
-  // 處理 QR 掃描結果
+  // 處理 QR 掃描結果 - 核心邏輯優化
   processQRResult(scannedData) {
-    let processed = false;
+    console.log('開始處理 QR 掃描結果:', scannedData);
     
-    // 清理掃描數據（移除可能的空白字符）
-    const cleanData = scannedData.trim();
-    console.log('處理 QR 掃描結果:', cleanData);
+    // 方法1: 直接調用 inventory 對象
+    if (this.tryDirectInventoryCall(scannedData)) {
+      this.scheduleHide();
+      return;
+    }
 
-    // 方法1: 直接調用全域 inventory 對象
+    // 方法2: 等待 inventory 載入
+    this.waitForInventoryAndProcess(scannedData);
+  }
+
+  // 直接調用 inventory 方法
+  tryDirectInventoryCall(scannedData) {
     if (window.inventory && typeof window.inventory.handleQRScan === 'function') {
       try {
-        console.log('使用 window.inventory.handleQRScan 處理結果');
-        window.inventory.handleQRScan(cleanData);
-        processed = true;
+        console.log('直接調用 window.inventory.handleQRScan');
+        window.inventory.handleQRScan(scannedData);
+        return true;
       } catch (error) {
-        console.error('window.inventory.handleQRScan 執行失敗:', error);
+        console.error('直接調用失敗:', error);
+        return false;
       }
     }
+    return false;
+  }
 
-    // 方法2: 等待 inventory 對象載入後再處理
-    if (!processed && !window.inventory) {
-      console.log('inventory 對象尚未載入，等待後重試...');
-      let retryCount = 0;
-      const maxRetries = 10;
+  // 等待 inventory 載入並處理
+  waitForInventoryAndProcess(scannedData) {
+    console.log('等待 inventory 對象載入...');
+    
+    let retryCount = 0;
+    const maxRetries = 20; // 增加重試次數
+    const retryInterval = 200; // 減少重試間隔
+    
+    const checkInventory = setInterval(() => {
+      retryCount++;
       
-      const retryInterval = setInterval(() => {
-        retryCount++;
-        if (window.inventory && typeof window.inventory.handleQRScan === 'function') {
-          try {
-            console.log(`重試成功 (第${retryCount}次): 使用 window.inventory.handleQRScan`);
-            window.inventory.handleQRScan(cleanData);
-            processed = true;
-            clearInterval(retryInterval);
-          } catch (error) {
-            console.error('重試時執行失敗:', error);
-            clearInterval(retryInterval);
-          }
-        } else if (retryCount >= maxRetries) {
-          console.warn('重試次數已達上限，inventory 對象仍未載入');
-          clearInterval(retryInterval);
-          this.fallbackProcessing(cleanData);
+      if (window.inventory && typeof window.inventory.handleQRScan === 'function') {
+        try {
+          console.log(`重試成功 (第${retryCount}次): 調用 window.inventory.handleQRScan`);
+          window.inventory.handleQRScan(scannedData);
+          clearInterval(checkInventory);
+          this.scheduleHide();
+        } catch (error) {
+          console.error('重試調用失敗:', error);
+          clearInterval(checkInventory);
+          this.fallbackProcessing(scannedData);
         }
-      }, 200); // 每200ms重試一次
-      
-      return; // 退出，等待重試結果
-    }
-
-    // 方法3: 觸發自定義事件供主系統監聽
-    if (!processed) {
-      try {
-        console.log('觸發 qrScanned 自定義事件');
-        const event = new CustomEvent('qrScanned', {
-          detail: { 
-            data: cleanData,
-            timestamp: new Date().toISOString()
-          }
-        });
-        document.dispatchEvent(event);
-        processed = true;
-      } catch (error) {
-        console.error('觸發自定義事件失敗:', error);
+      } else if (retryCount >= maxRetries) {
+        console.warn('等待 inventory 對象載入超時');
+        clearInterval(checkInventory);
+        this.fallbackProcessing(scannedData);
       }
-    }
-
-    // 記錄掃描歷史
-    this.saveScanHistory(cleanData, processed);
-
-    if (!processed) {
-      console.warn('QR 掃描結果未被處理:', cleanData);
-      this.showError(`無法處理設備編號：${cleanData}`);
-    }
+    }, retryInterval);
   }
 
   // 備用處理方法
   fallbackProcessing(scannedData) {
     console.log('使用備用處理方法:', scannedData);
     
-    // 存儲到 localStorage 供主系統稍後處理
-    const pendingScans = JSON.parse(localStorage.getItem('pendingQRScans') || '[]');
-    pendingScans.push({
-      data: scannedData,
-      timestamp: new Date().toISOString()
-    });
-    localStorage.setItem('pendingQRScans', JSON.stringify(pendingScans));
+    // 觸發自定義事件
+    try {
+      const event = new CustomEvent('qrScanned', {
+        detail: { 
+          data: scannedData,
+          timestamp: new Date().toISOString()
+        }
+      });
+      document.dispatchEvent(event);
+      console.log('已觸發 qrScanned 事件');
+    } catch (error) {
+      console.error('觸發自定義事件失敗:', error);
+    }
     
-    this.showError(`找不到設備 ${scannedData}，已暫存待處理`);
+    // 存儲到 localStorage
+    this.savePendingScan(scannedData);
+    
+    // 顯示錯誤訊息
+    this.showError(`設備 ${scannedData} 已記錄，請檢查系統狀態`);
+    
+    this.scheduleHide();
+  }
+
+  // 存儲待處理的掃描
+  savePendingScan(scannedData) {
+    try {
+      const pendingScans = JSON.parse(localStorage.getItem('pendingQRScans') || '[]');
+      pendingScans.push({
+        data: scannedData,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem('pendingQRScans', JSON.stringify(pendingScans));
+      console.log('已保存待處理掃描:', scannedData);
+    } catch (error) {
+      console.error('保存待處理掃描失敗:', error);
+    }
+  }
+
+  // 排程隱藏掃描器
+  scheduleHide() {
+    setTimeout(() => {
+      this.hide();
+    }, 1500);
   }
 
   // 儲存掃描歷史
@@ -373,7 +410,7 @@ class QRScannerManager {
         timestamp: new Date().toISOString(),
         processed: processed
       });
-      localStorage.setItem('qrScanHistory', JSON.stringify(scanHistory.slice(-20))); // 保留最近20筆
+      localStorage.setItem('qrScanHistory', JSON.stringify(scanHistory.slice(-50))); // 保留最近50筆
     } catch (error) {
       console.error('無法保存掃描歷史:', error);
     }
@@ -391,7 +428,6 @@ class QRScannerManager {
   // 播放提示音
   playBeep() {
     try {
-      // 使用 Web Audio API 播放提示音
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
@@ -408,7 +444,6 @@ class QRScannerManager {
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.2);
     } catch (error) {
-      // 如果無法播放音效就跳過
       console.warn('無法播放提示音:', error);
     }
   }
@@ -417,12 +452,21 @@ class QRScannerManager {
   showError(message) {
     this.updateScanStatus(message);
     
-    // 同時顯示 Toast 通知
     if (window.inventory && typeof window.inventory.showToast === 'function') {
       window.inventory.showToast(message, 'error');
     } else {
       console.error('QR Scanner Error:', message);
+      alert(message); // 備用顯示方式
     }
+  }
+
+  // 清理方法
+  destroy() {
+    console.log('銷毀 QR 掃描器');
+    this.stopScanning();
+    
+    // 移除事件監聽器
+    document.removeEventListener('qrScanResult', this.handleScanResult);
   }
 }
 
@@ -433,57 +477,68 @@ function closeQRScanner() {
   }
 }
 
-// 全域 QR 掃描結果處理函數（備用）
+// 全域 QR 掃描結果處理函數
 function handleQRScanResult(data) {
   console.log('全域處理器收到 QR 掃描結果:', data);
   
   if (window.inventory && typeof window.inventory.handleQRScan === 'function') {
     window.inventory.handleQRScan(data);
-  } else if (window.inventory && typeof window.inventory.showToast === 'function') {
-    window.inventory.showToast(`QR 掃描成功：${data}`, 'success');
+  } else {
+    console.warn('inventory 對象未就緒，觸發備用事件');
+    const event = new CustomEvent('qrScanned', { detail: { data } });
+    document.dispatchEvent(event);
   }
 }
 
-// 監聽自定義事件 - 與設備盤點系統整合
-document.addEventListener('qrScanned', (event) => {
-  console.log('收到 qrScanned 事件:', event.detail.data);
-  
-  const scannedData = event.detail.data;
-  
-  // 如果 inventory 對象已載入，直接處理
-  if (window.inventory && typeof window.inventory.handleQRScan === 'function') {
-    window.inventory.handleQRScan(scannedData);
-  } else {
-    // 否則等待載入
-    console.log('等待 inventory 對象載入...');
-    const checkInventory = setInterval(() => {
-      if (window.inventory && typeof window.inventory.handleQRScan === 'function') {
-        window.inventory.handleQRScan(scannedData);
-        clearInterval(checkInventory);
-      }
-    }, 100);
-    
-    // 10秒後停止等待
-    setTimeout(() => {
-      clearInterval(checkInventory);
-      console.warn('等待 inventory 對象載入超時');
-    }, 10000);
-  }
-});
-
-// 處理待處理的掃描結果
+// 初始化和事件監聽
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('初始化 QR 掃描器管理器');
+  
   // 初始化 QR 掃描器
   window.qrScanner = new QRScannerManager();
   
-  // 處理之前未處理的掃描結果
+  // 監聽自定義 QR 掃描事件
+  document.addEventListener('qrScanned', (event) => {
+    console.log('收到 qrScanned 事件:', event.detail.data);
+    
+    const scannedData = event.detail.data;
+    
+    // 嘗試處理掃描結果
+    const processResult = () => {
+      if (window.inventory && typeof window.inventory.handleQRScan === 'function') {
+        console.log('透過事件監聽器處理掃描結果');
+        window.inventory.handleQRScan(scannedData);
+        return true;
+      }
+      return false;
+    };
+    
+    // 立即嘗試處理
+    if (!processResult()) {
+      // 如果失敗，等待 inventory 載入
+      const waitForInventory = setInterval(() => {
+        if (processResult()) {
+          clearInterval(waitForInventory);
+        }
+      }, 100);
+      
+      // 10秒後停止等待
+      setTimeout(() => {
+        clearInterval(waitForInventory);
+        console.warn('等待 inventory 對象載入超時');
+      }, 10000);
+    }
+  });
+  
+  // 處理待處理的掃描結果
   setTimeout(() => {
     const pendingScans = JSON.parse(localStorage.getItem('pendingQRScans') || '[]');
-    if (pendingScans.length > 0 && window.inventory) {
-      console.log('處理待處理的掃描結果:', pendingScans);
+    if (pendingScans.length > 0) {
+      console.log('處理', pendingScans.length, '個待處理的掃描結果');
       
       pendingScans.forEach(scan => {
-        if (window.inventory.handleQRScan) {
+        if (window.inventory && window.inventory.handleQRScan) {
+          console.log('處理待處理掃描:', scan.data);
           window.inventory.handleQRScan(scan.data);
         }
       });
@@ -491,10 +546,17 @@ document.addEventListener('DOMContentLoaded', () => {
       // 清除已處理的掃描結果
       localStorage.removeItem('pendingQRScans');
     }
-  }, 1000); // 等待主系統載入完成
+  }, 2000); // 等待主系統完全載入
 });
 
-// 匯出類別供其他模組使用
+// 頁面卸載時清理資源
+window.addEventListener('beforeunload', () => {
+  if (window.qrScanner) {
+    window.qrScanner.destroy();
+  }
+});
+
+// 匯出類別
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = QRScannerManager;
 }
