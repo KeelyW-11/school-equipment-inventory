@@ -576,14 +576,84 @@ class EquipmentInventory {
     }, 5000);
   }
 
-  // 從 QR Code 掃描結果處理設備
-  handleQRScan(result) {
-    const item = this.data.find(d => d.編號 === result);
-    if (item) {
-      this.toggleStatus(result);
+// 從 QR Code 掃描結果處理設備 - 改進版
+handleQRScan(result) {
+  console.log('handleQRScan 收到掃描結果:', result);
+  
+  // 清理掃描數據
+  const cleanResult = result.trim();
+  
+  // 尋找對應的設備
+  const item = this.data.find(d => d.編號 === cleanResult);
+  
+  if (item) {
+    console.log('找到對應設備:', item);
+    
+    // 檢查當前狀態
+    if (item.狀態 === '未盤點') {
+      this.toggleStatus(cleanResult);
+      this.showToast(`✅ ${item.編號} - ${item.名稱} 盤點完成`, 'success');
     } else {
-      this.showToast(`找不到設備編號：${result}`, 'error');
+      this.showToast(`ℹ️ ${item.編號} - ${item.名稱} 已經盤點過了`, 'info');
+      
+      // 可選：允許取消盤點
+      if (confirm(`設備 ${item.編號} - ${item.名稱} 已經盤點過了，是否要取消盤點？`)) {
+        this.toggleStatus(cleanResult);
+      }
     }
+    
+    // 自動滾動到該設備
+    this.scrollToEquipment(cleanResult);
+    
+  } else {
+    console.warn('找不到設備:', cleanResult);
+    this.showToast(`❌ 找不到設備編號：${cleanResult}`, 'error');
+    
+    // 記錄未找到的設備
+    this.logUnfoundEquipment(cleanResult);
+  }
+}
+
+// 新增：滾動到指定設備
+scrollToEquipment(equipmentId) {
+  try {
+    // 查找表格中的設備行
+    const table = document.querySelector('#equipment-table tbody');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tr');
+    for (const row of rows) {
+      const idCell = row.querySelector('td:nth-child(2) strong');
+      if (idCell && idCell.textContent.trim() === equipmentId) {
+        // 高亮顯示
+        row.style.backgroundColor = '#fff3cd';
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // 3秒後移除高亮
+        setTimeout(() => {
+          row.style.backgroundColor = '';
+        }, 3000);
+        
+        break;
+      }
+    }
+  } catch (error) {
+    console.error('滾動到設備失敗:', error);
+  }
+}
+
+// 新增：記錄未找到的設備
+logUnfoundEquipment(equipmentId) {
+  try {
+    const unfoundLog = JSON.parse(localStorage.getItem('unfoundEquipment') || '[]');
+    unfoundLog.push({
+      id: equipmentId,
+      timestamp: new Date().toISOString()
+    });
+    // 只保留最近50筆記錄
+    localStorage.setItem('unfoundEquipment', JSON.stringify(unfoundLog.slice(-50)));
+  } catch (error) {
+    console.error('記錄未找到設備失敗:', error);
   }
 }
 
@@ -598,8 +668,11 @@ function closeQRScanner() {
   }
 }
 
-// 初始化系統
 let inventory;
 document.addEventListener('DOMContentLoaded', () => {
   inventory = new EquipmentInventory();
+  // 確保全域可訪問
+  window.inventory = inventory;
+  
+  console.log('設備盤點系統已初始化');
 });
