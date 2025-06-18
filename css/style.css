@@ -270,18 +270,22 @@ body {
   font-size: 0.9rem;
 }
 
-/* 表格容器 */
+/* 表格容器 - 修正表格顯示問題 */
 .table-container {
   background: white;
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow);
   overflow-x: auto;
+  /* 確保所有欄位都能顯示 */
+  min-width: 100%;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+  /* 移除最小寬度限制，讓表格自適應 */
+  table-layout: auto;
 }
 
 th {
@@ -290,13 +294,24 @@ th {
   padding: 1rem;
   text-align: left;
   font-weight: 600;
-  white-space: nowrap;
+  /* 修正：允許標題文字換行，確保編號欄位可見 */
+  white-space: normal;
+  min-width: 80px; /* 給每個欄位最小寬度 */
+}
+
+/* 為編號欄位設定特定樣式 */
+th:first-child,
+td:first-child {
+  min-width: 60px;
+  text-align: center;
 }
 
 td {
   padding: 1rem;
   border-bottom: 1px solid var(--border);
-  white-space: nowrap;
+  /* 修正：允許內容換行，避免被截斷 */
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 tr:hover {
@@ -315,6 +330,9 @@ tr.selected {
   font-weight: 500;
   cursor: pointer;
   transition: var(--transition);
+  /* 確保狀態標籤不會被截斷 */
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .status-checked {
@@ -669,7 +687,7 @@ tr.selected {
   --danger: #cc0000;
 }
 
-/* 響應式設計 */
+/* 響應式設計 - 修正移動設備表格顯示 */
 @media (max-width: 1024px) {
   .main-content {
     grid-template-columns: 250px 1fr;
@@ -740,12 +758,20 @@ tr.selected {
     font-size: 0.8rem;
   }
   
+  /* 修正移動設備表格顯示 */
   table {
-    font-size: 0.85rem;
+    font-size: 0.9rem; /* 稍微增大字體 */
   }
   
   th, td {
-    padding: 0.5rem;
+    padding: 0.75rem 0.5rem; /* 調整間距 */
+  }
+  
+  /* 確保編號欄位在小螢幕上仍然可見 */
+  th:first-child,
+  td:first-child {
+    min-width: 50px;
+    padding: 0.75rem 0.25rem;
   }
   
   .upload-content {
@@ -796,9 +822,25 @@ tr.selected {
     font-size: 1.5rem;
   }
   
+  /* 修正小螢幕表格顯示 */
   .table-container {
-    margin: 0 -1rem;
+    margin: 0 -0.5rem; /* 調整邊距 */
     border-radius: 0;
+  }
+  
+  table {
+    font-size: 0.85rem;
+  }
+  
+  th, td {
+    padding: 0.5rem 0.25rem;
+  }
+  
+  /* 編號欄位在極小螢幕上的處理 */
+  th:first-child,
+  td:first-child {
+    min-width: 40px;
+    font-size: 0.8rem;
   }
   
   #toast-container {
