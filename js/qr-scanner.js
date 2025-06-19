@@ -131,11 +131,10 @@ class QRScannerManager {
   startScanLoop() {
     if (!this.isScanning) return;
 
-    // 如果有 QrScanner 庫就使用
+    // 檢查 QrScanner 是否可用
     if (typeof QrScanner !== 'undefined') {
       try {
-        // 設定 QrScanner
-        QrScanner.WORKER_PATH = 'https://cdnjs.cloudflare.com/ajax/libs/qr-scanner/1.4.2/qr-scanner-worker.min.js';
+        console.log('使用 QrScanner 庫');
         
         this.scanner = new QrScanner(
           this.video,
@@ -144,50 +143,173 @@ class QRScannerManager {
             returnDetailedScanResult: true,
             highlightScanRegion: true,
             highlightCodeOutline: true,
-            maxScansPerSecond: 2
+            maxScansPerSecond: 1,
+            calculateScanRegion: () => ({ x: 0.1, y: 0.1, width: 0.8, height: 0.8 })
           }
         );
         
-        this.scanner.start();
-        console.log('QrScanner 啟動成功');
+        this.scanner.start().then(() => {
+          console.log('QrScanner 啟動成功');
+          this.updateStatus('請將 QR Code 對準掃描框中央');
+        }).catch(error => {
+          console.error('QrScanner 啟動失敗:', error);
+          this.fallbackScanMethod();
+        });
         
       } catch (error) {
         console.error('QrScanner 初始化失敗:', error);
         this.fallbackScanMethod();
       }
     } else {
-      console.log('QrScanner 庫未載入，使用備用方案');
-      this.fallbackScanMethod();
+      console.log('QrScanner 庫未載入，使用 Canvas 掃描');
+      this.canvasScanMethod();
     }
   }
 
+  // 新增 Canvas 掃描方法
+  canvasScanMethod() {
+    console.log('開始 Canvas 掃描方法');
+    this.updateStatus('正在掃描，請將 QR Code 對準畫面中央');
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    const scanLoop = () => {
+      if (!this.isScanning) return;
+      
+      try {
+        canvas.width = this.video.videoWidth;
+        canvas.height = this.video.videoHeight;
+        
+        if (canvas.width > 0 && canvas.height > 0) {
+          ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
+          
+          // 嘗試使用 jsQR（如果可用）
+          if (typeof jsQR !== 'undefined') {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            
+            if (code) {
+              this.handleScanResult(code.data);
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Canvas 掃描錯誤:', error);
+      }
+      
+      // 每500ms掃描一次
+      setTimeout(scanLoop, 500);
+    };
+    
+    scanLoop();
+  }
+
   fallbackScanMethod() {
-    // 備用掃描方法 - 使用手動輸入
-    this.updateStatus('自動掃描不可用，請使用手動輸入');
+    // 備用掃描方法 - 立即顯示手動輸入，並嘗試簡單的圖像檢測
+    console.log('使用備用掃描方法');
+    this.updateStatus('自動掃描有問題，請使用手動輸入');
     this.showManualInput();
+    
+    // 同時嘗試簡單的定時檢測
+    this.simpleDetection();
+  }
+
+  simpleDetection() {
+    console.log('開始簡單檢測');
+    let lastImageData = null;
+    
+    const detect = () => {
+      if (!this.isScanning) return;
+      
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = this.video.videoWidth || 640;
+        canvas.height = this.video.videoHeight || 480;
+        
+        if (this.video.readyState === 4) { // HAVE_ENOUGH_DATA
+          ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          
+          // 檢查畫面是否有變化（粗略檢測是否有QR碼）
+          if (lastImageData) {
+            let diff = 0;
+            for (let i = 0; i < imageData.data.length; i += 40) {
+              diff += Math.abs(imageData.data[i] - lastImageData.data[i]);
+            }
+            
+            // 如果變化很大，可能是新的QR碼
+            if (diff > 50000) {
+              console.log('檢測到畫面變化，可能是QR碼');
+              this.updateStatus('檢測到變化，請點擊手動輸入按鈕');
+            }
+          }
+          
+          lastImageData = imageData;
+        }
+      } catch (error) {
+        console.error('簡單檢測錯誤:', error);
+      }
+      
+      setTimeout(detect, 1000);
+    };
+    
+    detect();
   }
 
   showManualInput() {
     const statusElement = document.getElementById('scan-status');
     if (statusElement) {
       statusElement.innerHTML = `
-        <p style="margin-bottom: 15px;">自動掃描不可用</p>
-        <button onclick="window.qrScanner.manualInput()" 
-                style="padding: 15px 30px; margin: 10px;
-                       background: #007bff; color: white; 
-                       border: none; border-radius: 8px; 
-                       font-size: 16px; cursor: pointer;">
-          📝 手動輸入設備編號
-        </button>
+        <div style="text-align: center; padding: 20px;">
+          <p style="margin-bottom: 15px; color: #ffc107;">自動掃描可能有問題</p>
+          <button onclick="window.qrScanner.manualInput()" 
+                  style="padding: 15px 30px; margin: 10px;
+                         background: #007bff; color: white; 
+                         border: none; border-radius: 8px; 
+                         font-size: 16px; cursor: pointer;">
+            📝 手動輸入設備編號
+          </button>
+          <br>
+          <button onclick="window.qrScanner.testScan()" 
+                  style="padding: 10px 20px; margin: 5px;
+                         background: #28a745; color: white; 
+                         border: none; border-radius: 5px; 
+                         font-size: 14px; cursor: pointer;">
+            🧪 測試掃描功能
+          </button>
+          <br>
+          <small style="color: #6c757d; margin-top: 10px; display: block;">
+            如果有QR碼在畫面中，請嘗試手動輸入編號
+          </small>
+        </div>
       `;
     }
   }
 
   manualInput() {
-    const input = prompt('請輸入設備編號：');
+    const input = prompt('請輸入設備編號：\n\n範例: 314010102-300933');
     if (input && input.trim()) {
+      console.log('手動輸入:', input.trim());
       this.handleScanResult(input.trim());
     }
+  }
+
+  testScan() {
+    // 測試掃描功能
+    console.log('測試掃描功能');
+    this.updateStatus('測試中...');
+    
+    // 模擬掃描一個測試編號
+    const testCode = '314010102-300933';
+    
+    setTimeout(() => {
+      console.log('執行測試掃描:', testCode);
+      this.handleScanResult(testCode);
+    }, 1000);
   }
 
   handleScanResult(result) {
