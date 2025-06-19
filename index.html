@@ -93,7 +93,13 @@
               <th>操作</th>
             </tr>
           </thead>
-          <tbody></tbody>
+          <tbody>
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                載入中...
+              </td>
+            </tr>
+          </tbody>
         </table>
       </div>
     </div>
@@ -126,7 +132,7 @@
           <div class="scan-frame"></div>
         </div>
       </div>
-      <p id="scan-status">請將 QR Code 對準掃描框</p>
+      <p id="scan-status">正在初始化掃描器...</p>
       <div class="scanner-buttons">
         <button id="switch-camera" class="btn btn-secondary">🔄 切換鏡頭</button>
         <button onclick="closeQRScanner()" class="btn btn-primary">關閉掃描器</button>
@@ -150,5 +156,107 @@
   <!-- 引入自定義 JavaScript -->
   <script src="js/qr-scanner.js"></script>
   <script src="js/main.js"></script>
+  
+  <!-- 檔案上傳處理 -->
+  <script>
+    // 檔案上傳功能
+    document.addEventListener('DOMContentLoaded', () => {
+      const fileInput = document.getElementById('file-input');
+      const uploadOverlay = document.getElementById('upload-overlay');
+      
+      if (fileInput) {
+        fileInput.addEventListener('change', handleFileUpload);
+      }
+      
+      // 拖放功能
+      document.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadOverlay.classList.add('show');
+      });
+      
+      document.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadOverlay.classList.remove('show');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].name.endsWith('.csv')) {
+          handleFileUpload({ target: { files: files } });
+        }
+      });
+      
+      uploadOverlay.addEventListener('dragleave', (e) => {
+        if (e.target === uploadOverlay) {
+          uploadOverlay.classList.remove('show');
+        }
+      });
+    });
+    
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      if (!file.name.endsWith('.csv')) {
+        alert('請選擇 CSV 檔案');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const csvText = e.target.result;
+          
+          // 解析 CSV
+          const result = Papa.parse(csvText, {
+            header: true,
+            skipEmptyLines: true,
+            encoding: 'UTF-8'
+          });
+          
+          if (result.errors.length > 0) {
+            console.error('CSV 解析錯誤:', result.errors);
+          }
+          
+          // 更新資料
+          if (window.inventory && result.data.length > 0) {
+            const newData = result.data.map(item => ({
+              編號: item.編號 || '',
+              名稱: item.名稱 || '',
+              教室: item.教室 || '',
+              狀態: '未盤點',
+              最後更新: ''
+            })).filter(item => item.編號 && item.名稱);
+            
+            window.inventory.data = newData;
+            window.inventory.generateClassrooms();
+            window.inventory.restoreStatus(); // 恢復之前的狀態
+            window.inventory.render();
+            
+            window.inventory.showToast(`成功載入 ${newData.length} 筆設備資料`, 'success');
+          }
+          
+          closeUpload();
+          
+        } catch (error) {
+          console.error('檔案處理失敗:', error);
+          alert('檔案格式錯誤，請檢查 CSV 格式');
+        }
+      };
+      
+      reader.readAsText(file, 'UTF-8');
+    }
+    
+    function closeUpload() {
+      const overlay = document.getElementById('upload-overlay');
+      if (overlay) {
+        overlay.classList.remove('show');
+      }
+      
+      // 清除檔案輸入
+      const fileInput = document.getElementById('file-input');
+      if (fileInput) {
+        fileInput.value = '';
+      }
+    }
+  </script>
 </body>
 </html>
