@@ -65,26 +65,64 @@ class GitHubPagesQRScanner {
     if (status) {
       status.innerHTML = `
         <div style="text-align: center; padding: 20px;">
-          <p style="color: #007bff; margin-bottom: 15px;">📱 QR 掃描器</p>
+          <p style="color: #007bff; margin-bottom: 20px; font-size: 18px; font-weight: bold;">📱 QR 掃描器</p>
           
           <button onclick="window.githubQRScanner.manualInput()" 
-                  style="display: block; width: 200px; margin: 10px auto; 
-                         padding: 15px; background: #007bff; color: white; 
-                         border: none; border-radius: 8px; font-size: 16px; cursor: pointer;">
+                  style="display: block; width: 90%; max-width: 300px; margin: 15px auto; 
+                         padding: 20px 15px; background: linear-gradient(45deg, #007bff, #0056b3); 
+                         color: white; border: none; border-radius: 12px; 
+                         font-size: 18px; font-weight: bold; cursor: pointer; 
+                         box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+                         transition: all 0.3s ease;">
             ✏️ 手動輸入設備編號
           </button>
           
           <button onclick="window.githubQRScanner.attemptCameraStart()" 
-                  style="display: block; width: 200px; margin: 10px auto; 
-                         padding: 10px; background: #28a745; color: white; 
-                         border: none; border-radius: 5px; font-size: 14px; cursor: pointer;">
-            📹 嘗試啟動相機掃描
+                  style="display: block; width: 90%; max-width: 300px; margin: 15px auto; 
+                         padding: 18px 15px; background: linear-gradient(45deg, #28a745, #1e7e34); 
+                         color: white; border: none; border-radius: 12px; 
+                         font-size: 16px; font-weight: bold; cursor: pointer;
+                         box-shadow: 0 4px 12px rgba(40,167,69,0.3);
+                         transition: all 0.3s ease;">
+            📹 自動相機掃描
           </button>
           
-          <div id="camera-status" style="margin-top: 15px; font-size: 14px; color: #666;">
-            正在檢測相機...
+          <button onclick="window.githubQRScanner.hide()" 
+                  style="display: block; width: 90%; max-width: 300px; margin: 15px auto; 
+                         padding: 15px; background: linear-gradient(45deg, #6c757d, #545b62); 
+                         color: white; border: none; border-radius: 10px; 
+                         font-size: 14px; cursor: pointer;
+                         box-shadow: 0 3px 8px rgba(108,117,125,0.3);
+                         transition: all 0.3s ease;">
+            ❌ 關閉掃描器
+          </button>
+          
+          <div id="camera-status" style="margin-top: 20px; padding: 15px; 
+                                         background: rgba(0,123,255,0.1); border-radius: 8px;
+                                         font-size: 14px; color: #495057; line-height: 1.5;">
+            <span style="color: #007bff;">💡 提示：</span>可以直接輸入設備編號，或嘗試相機掃描
           </div>
         </div>
+        
+        <style>
+          button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15) !important;
+          }
+          
+          button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+          }
+          
+          @media (max-width: 480px) {
+            button {
+              font-size: 16px !important;
+              padding: 18px 12px !important;
+              margin: 12px auto !important;
+            }
+          }
+        </style>
       `;
     }
   }
@@ -257,9 +295,102 @@ class GitHubPagesQRScanner {
   }
 
   manualInput() {
-    const input = prompt('請輸入設備編號：\n\n範例：314010102-300933');
-    if (input && input.trim()) {
-      this.processQRData(input.trim());
+    // 創建自定義的輸入對話框，更適合手機使用
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; box-sizing: border-box;
+    `;
+    
+    overlay.innerHTML = `
+      <div style="background: white; border-radius: 15px; padding: 30px; 
+                  width: 100%; max-width: 400px; text-align: center;
+                  box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+        <h3 style="margin: 0 0 20px 0; color: #333; font-size: 20px;">
+          📝 輸入設備編號
+        </h3>
+        
+        <input type="text" id="equipment-input" 
+               placeholder="例如：314010102-300933"
+               style="width: 100%; padding: 18px; font-size: 16px; border: 2px solid #ddd;
+                      border-radius: 10px; box-sizing: border-box; margin-bottom: 20px;
+                      text-align: center; outline: none;">
+        
+        <div style="display: flex; gap: 15px; justify-content: center;">
+          <button onclick="window.githubQRScanner.submitManualInput()" 
+                  style="flex: 1; padding: 18px; background: linear-gradient(45deg, #28a745, #1e7e34); 
+                         color: white; border: none; border-radius: 10px; 
+                         font-size: 16px; font-weight: bold; cursor: pointer;
+                         transition: all 0.3s ease;">
+            ✅ 確認
+          </button>
+          
+          <button onclick="window.githubQRScanner.closeManualInput()" 
+                  style="flex: 1; padding: 18px; background: linear-gradient(45deg, #6c757d, #545b62); 
+                         color: white; border: none; border-radius: 10px; 
+                         font-size: 16px; font-weight: bold; cursor: pointer;
+                         transition: all 0.3s ease;">
+            ❌ 取消
+          </button>
+        </div>
+        
+        <div style="margin-top: 15px; font-size: 12px; color: #666; line-height: 1.4;">
+          💡 提示：請輸入完整的設備編號，包含所有數字和符號
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // 聚焦輸入框
+    setTimeout(() => {
+      const input = document.getElementById('equipment-input');
+      if (input) {
+        input.focus();
+        // 支援 Enter 鍵確認
+        input.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            this.submitManualInput();
+          }
+        });
+      }
+    }, 100);
+    
+    this.manualInputOverlay = overlay;
+  }
+
+  submitManualInput() {
+    const input = document.getElementById('equipment-input');
+    if (input && input.value.trim()) {
+      const equipmentId = input.value.trim();
+      this.closeManualInput();
+      this.processQRData(equipmentId);
+    } else {
+      // 震動提示（如果支援）
+      if (navigator.vibrate) {
+        navigator.vibrate([100, 50, 100]);
+      }
+      // 高亮輸入框
+      if (input) {
+        input.style.borderColor = '#dc3545';
+        input.style.backgroundColor = '#fff5f5';
+        input.placeholder = '請輸入設備編號！';
+        
+        setTimeout(() => {
+          input.style.borderColor = '#ddd';
+          input.style.backgroundColor = 'white';
+          input.placeholder = '例如：314010102-300933';
+        }, 2000);
+      }
+    }
+  }
+
+  closeManualInput() {
+    if (this.manualInputOverlay) {
+      document.body.removeChild(this.manualInputOverlay);
+      this.manualInputOverlay = null;
     }
   }
 
