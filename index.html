@@ -151,7 +151,24 @@
 
   <!-- 引入必要的 JavaScript 庫 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qr-scanner/1.4.2/qr-scanner.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  
+  <!-- 備用 QR 掃描庫 -->
+  <script>
+    // 檢查庫是否載入成功
+    window.addEventListener('load', () => {
+      console.log('檢查 QR 掃描庫載入狀態:');
+      console.log('QrScanner:', typeof QrScanner !== 'undefined' ? '✅' : '❌');
+      console.log('jsQR:', typeof jsQR !== 'undefined' ? '✅' : '❌');
+      console.log('Papa:', typeof Papa !== 'undefined' ? '✅' : '❌');
+      
+      // 如果主要庫沒載入，顯示警告
+      if (typeof QrScanner === 'undefined') {
+        console.warn('QrScanner 庫載入失敗，將使用備用方案');
+      }
+    });
+  </script>
   
   <!-- 引入自定義 JavaScript -->
   <script src="js/qr-scanner.js"></script>
